@@ -17,10 +17,14 @@ class LLMAdapter:
         """Load Gemini configuration, initialize the API client, and create a model."""
         load_dotenv()
         self.config = config
+        self.demo_mode = config.get("demo_mode", False)
         self.provider = config.get("ai", {}).get("provider", "gemini")
         self.model_name = config.get("ai", {}).get("gemini_model", "gemini-2.0-flash")
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.model = None
+
+        if self.demo_mode:
+            return
 
         if self.provider != "gemini":
             raise ValueError(f"Unsupported AI provider: {self.provider}")

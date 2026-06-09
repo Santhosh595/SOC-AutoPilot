@@ -59,12 +59,11 @@ Report + SPL Rule
 
 - Python 3.10+
 - Git
-- Splunk Enterprise free trial
 
 ### 1. Clone Repo
 
 ```bash
-git clone https://github.com/your-org/soc-autopilot.git
+git clone https://github.com/Santhosh595/SOC-AutoPilot.git
 cd soc-autopilot
 ```
 
@@ -76,18 +75,29 @@ install.bat
 
 ### 3. Configure Environment
 
-Copy `.env` and fill in:
+Copy `.env.example` to `.env` and fill in your credentials:
 
-```env
-GEMINI_API_KEY=PASTE_YOUR_GEMINI_KEY_HERE
-SPLUNK_TOKEN=PASTE_YOUR_SPLUNK_TOKEN_HERE
+```bash
+copy .env.example .env   # Windows
+# or
+cp .env.example .env     # macOS / Linux
 ```
 
-Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/).
+```env
+GEMINI_API_KEY=your_key_here
+SPLUNK_TOKEN=your_token_here
+```
 
-### 4. Install Splunk MCP Server
+Get a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
 
-Install the Splunk MCP Server app from [Splunkbase](https://splunkbase.splunk.com/), then configure your Splunk token in `.env` and `config.yaml`.
+> **No keys? No Splunk?** The repo ships with `demo_mode: true` in `config.yaml`.
+> Run `python main.py test` and `python main.py investigate "..."` immediately —
+> all Splunk calls use built-in sample data and the LLM step is skipped gracefully.
+
+### 4. (Optional) Connect Splunk
+
+Set `demo_mode: false` in `config.yaml`, install the Splunk MCP Server app from
+[Splunkbase](https://splunkbase.splunk.com/), then add your Splunk token to `.env`.
 
 ## Usage
 
