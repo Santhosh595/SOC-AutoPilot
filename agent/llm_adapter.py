@@ -1,27 +1,23 @@
 import json
 import os
 import re
-import warnings
 
 from dotenv import load_dotenv
-
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore", FutureWarning)
-    import google.generativeai as genai
+from google import genai
 
 
 class LLMAdapter:
     """Provide a single interface for Gemini-powered SOC analysis tasks."""
 
     def __init__(self, config: dict):
-        """Load Gemini configuration, initialize the API client, and create a model."""
+        """Load Gemini configuration, initialize the API client."""
         load_dotenv()
         self.config = config
         self.demo_mode = config.get("demo_mode", False)
         self.provider = config.get("ai", {}).get("provider", "gemini")
         self.model_name = config.get("ai", {}).get("gemini_model", "gemini-2.0-flash")
         self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model = None
+        self.client = None
 
         if self.demo_mode:
             return
@@ -31,17 +27,19 @@ class LLMAdapter:
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY environment variable is not set")
 
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(self.model_name)
+        self.client = genai.Client(api_key=self.api_key)
 
     def analyze(self, system_prompt: str, user_prompt: str) -> str:
         """Send a prompt to Gemini and return the plain text response."""
-        if self.model is None:
+        if self.client is None:
             return ""
         try:
             prompt = f"{system_prompt.strip()}\n\n{user_prompt.strip()}"
-            response = self.model.generate_content(prompt)
-            return getattr(response, "text", "").strip()
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
+            return response.text.strip() if response.text else ""
         except Exception as error:
             return "LLM_ERROR: " + str(error)
 
