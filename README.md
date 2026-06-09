@@ -34,24 +34,11 @@ YouTube video: [Coming soon](https://youtube.com/)
 
 ## Architecture
 
-```text
-Alert Input
-    |
-    v
-AutoPilot Agent
-    |
-    +--> Splunk MCP
-    |       |
-    |       v
-    |   Live Log Queries
-    |
-    +--> Gemini Flash
-    |
-    +--> Knowledge Base
-            |
-            v
-Report + SPL Rule
-```
+![SOC AutoPilot Architecture](architecture.png)
+
+## Splunk Integration
+
+SOC AutoPilot connects to Splunk via the Splunk REST API (`/services/search/jobs`) using Bearer token authentication. This is compatible with the Splunk MCP Server app on Splunkbase, which exposes the same REST endpoints. The `mcp` Python package is included in `requirements.txt` for future native MCP transport support.
 
 ## Setup
 
@@ -129,9 +116,9 @@ python main.py feedback --id 1 --verdict FALSE_POSITIVE --note "Known scanner"
 
 | Backend | Status | Setup |
 | --- | --- | --- |
-| Gemini | Default | Add `GEMINI_API_KEY` to `.env` and set `ai.provider: gemini` in `config.yaml`. |
-| Groq | Planned | Add a Groq API key and configure the Groq adapter when backend support is enabled. |
-| Ollama | Planned | Install Ollama locally, pull a security-capable model, and configure the Ollama adapter when backend support is enabled. |
+| Gemini | ✅ Default | Add `GEMINI_API_KEY` to `.env`, set `ai.provider: gemini` in `config.yaml`. |
+| Foundation-sec-8B | ✅ Supported via Ollama | Install Ollama, run `ollama pull hf.co/bartowski/Cisco-Foundation-Sec-8B-GGUF`, set `ai.provider: ollama` in `config.yaml`. |
+| Groq | 🔜 Planned | Add Groq API key and set `ai.provider: groq` in `config.yaml`. |
 
 ## Built For
 

@@ -143,7 +143,7 @@ class AutoPilotAgent:
                 detection_spl = ""
 
             report_path = self.reporter.save_markdown_report(report_markdown)
-            spl_path = self.reporter.save_spl_rule(detection_spl, alert_description)
+            spl_path = self.reporter.save_spl_rule(detection_spl, alert_description) if detection_spl else None
             progress.advance(task)
 
             progress.update(task, description="[6/6] Saving to knowledge base...")
@@ -182,14 +182,50 @@ class AutoPilotAgent:
         feedback: str,
         correct_verdict: str = None,
     ):
-        """Store analyst feedback for an investigation and print confirmation."""
+        """Store analyst feedback and record false-positive patterns when applicable."""
         try:
+            # Fetch IOCs before updating so we can record FP patterns
+            ip_addresses = []
+            if correct_verdict and correct_verdict.upper() == "FALSE_POSITIVE":
+                try:
+                    cursor = self.knowledge_base.conn.cursor()
+                    cursor.execute(
+                        "SELECT iocs FROM investigations WHERE id = ?",
+                        (investigation_id,),
+                    )
+                    row = cursor.fetchone()
+                    if row and row["iocs"]:
+                        iocs = json.loads(row["iocs"])
+                        ip_addresses = iocs.get("ip_addresses", [])
+                except Exception as error:
+                    self.console.print(
+                        f"[yellow]Could not load IOCs for FP pattern: {error}[/yellow]"
+                    )
+
             self.knowledge_base.add_analyst_feedback(
                 investigation_id,
                 feedback,
                 correct_verdict,
             )
+
+            # Record each source IP as a known false-positive pattern
+            for ip_address in ip_addresses:
+                try:
+                    self.knowledge_base.add_false_positive_pattern(
+                        pattern=feedback,
+                        source_ip=ip_address,
+                        alert_type="analyst_confirmed",
+                    )
+                except Exception as error:
+                    self.console.print(
+                        f"[yellow]Could not save FP pattern for {ip_address}: {error}[/yellow]"
+                    )
+
             self.console.print("[green]Analyst feedback saved successfully[/green]")
+            if ip_addresses:
+                self.console.print(
+                    f"[green]Recorded {len(ip_addresses)} IP(s) as false-positive patterns[/green]"
+                )
         except Exception as error:
             self.console.print(f"[red]Failed to save analyst feedback: {error}[/red]")
 
