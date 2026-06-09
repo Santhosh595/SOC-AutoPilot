@@ -4,7 +4,7 @@ splunk:
   token: PASTE_YOUR_SPLUNK_TOKEN_HERE
   verify_ssl: false
 
-demo_mode: false
+demo_mode: true
 
 ai:
   provider: gemini
