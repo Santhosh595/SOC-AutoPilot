@@ -36,6 +36,8 @@ class LLMAdapter:
 
     def analyze(self, system_prompt: str, user_prompt: str) -> str:
         """Send a prompt to Gemini and return the plain text response."""
+        if self.model is None:
+            return ""
         try:
             prompt = f"{system_prompt.strip()}\n\n{user_prompt.strip()}"
             response = self.model.generate_content(prompt)

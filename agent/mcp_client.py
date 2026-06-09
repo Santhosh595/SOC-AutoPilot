@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 import requests
 import urllib3
+from dotenv import load_dotenv
 from rich.console import Console
 
 
@@ -12,11 +13,12 @@ class SplunkMCPClient:
 
     def __init__(self, config: dict):
         """Initialize Splunk connection settings from project configuration."""
+        load_dotenv()
         splunk_config = config.get("splunk", {})
         self.demo_mode = config.get("demo_mode", False)
         self.host = splunk_config.get("host", "localhost")
         self.port = splunk_config.get("port", 8000)
-        self.token = splunk_config.get("token", "")
+        self.token = os.getenv("SPLUNK_TOKEN") or splunk_config.get("token", "")
         self.verify_ssl = splunk_config.get("verify_ssl", False)
         self.base_url = f"https://{self.host}:{self.port}"
         self.headers = {
@@ -140,7 +142,9 @@ class SplunkMCPClient:
 
     def _load_sample_alerts(self) -> list:
         """Load local sample alert descriptions for demo mode."""
-        sample_path = os.path.join("sample_data", "sample_alerts.json")
+        sample_path = os.path.join(
+            os.path.dirname(__file__), "..", "sample_data", "sample_alerts.json"
+        )
         try:
             with open(sample_path, "r", encoding="utf-8") as sample_file:
                 return json.load(sample_file)

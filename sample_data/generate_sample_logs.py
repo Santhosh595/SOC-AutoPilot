@@ -17,8 +17,10 @@ from rich.table import Table
 HEC_URL = "http://localhost:8088/services/collector/event"
 
 
-def load_config(config_path="config.yaml"):
+def load_config(config_path=None):
     """Load project configuration from config.yaml."""
+    if config_path is None:
+        config_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
     if not os.path.exists(config_path):
         return {}
 

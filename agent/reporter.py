@@ -28,7 +28,12 @@ class Reporter:
         return file_path
 
     def save_spl_rule(self, spl_content: str, alert_name: str) -> str:
-        """Save a Splunk SPL detection rule and return the full file path."""
+        """Save a Splunk SPL detection rule and return the full file path.
+
+        Returns None without writing a file when spl_content is empty.
+        """
+        if not spl_content or not spl_content.strip():
+            return None
         sanitized_alert_name = self._sanitize_filename(alert_name)
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         filename = f"detection_{sanitized_alert_name}_{timestamp}.spl"
