@@ -1,0 +1,5 @@
+[
+  "Brute force attempt from 185.220.101.45 against admin account with multiple failed logins followed by a successful login",
+  "Suspicious PowerShell encoded command execution by user: jsmith on WORKSTATION-04",
+  "Possible data exfiltration by user: svc_backup with large outbound transfers to 203.0.113.99"
+]

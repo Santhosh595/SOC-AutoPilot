@@ -1,0 +1,19 @@
+splunk:
+  host: localhost
+  port: 8000
+  token: PASTE_YOUR_SPLUNK_TOKEN_HERE
+  verify_ssl: false
+
+demo_mode: false
+
+ai:
+  provider: gemini
+  gemini_model: gemini-2.0-flash
+
+agent:
+  max_investigation_steps: 10
+  confidence_threshold: 0.6
+
+output:
+  reports_dir: ./reports
+  logs_dir: ./logs
