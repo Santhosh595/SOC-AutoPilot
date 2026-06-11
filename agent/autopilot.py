@@ -11,6 +11,7 @@ from agent.knowledge_base import KnowledgeBase
 from agent.llm_adapter import LLMAdapter
 from agent.mcp_client import SplunkMCPClient
 from agent.reporter import Reporter
+from agent.notifier import Notifier
 from agent.threat_intel import ThreatIntel
 
 
@@ -26,6 +27,7 @@ class AutoPilotAgent:
         self.llm_adapter = self._safe_init_llm(config)
         self.knowledge_base = self._safe_init_knowledge_base()
         self.threat_intel = self._safe_init_threat_intel()
+        self.notifier = self._safe_init_notifier(config)
         reports_dir = config.get("output", {}).get("reports_dir", "./reports")
         self.reporter = Reporter(reports_dir)
 
@@ -188,7 +190,7 @@ class AutoPilotAgent:
             classification, iocs, similar_past_cases, threat_enrichment
         )
 
-        return {
+        result = {
             "investigation_id": investigation_id,
             "alert_description": alert_description,
             "iocs": iocs,
@@ -202,6 +204,16 @@ class AutoPilotAgent:
             "report_path": report_path,
             "spl_path": spl_path,
         }
+
+        # Automatic notification for critical / high-severity threats
+        try:
+            self.notifier.notify(result)
+        except Exception as error:
+            self.console.print(f"[red]Notification failed: {error}[/red]")
+
+        return result
+
+
 
     def get_feedback(
         self,
@@ -295,6 +307,16 @@ class AutoPilotAgent:
                 f"[red]Threat intel initialization failed: {error}[/red]"
             )
             return _NullThreatIntel()
+
+    def _safe_init_notifier(self, config):
+        """Initialize the Notifier, or return a no-op fallback."""
+        try:
+            return Notifier(config)
+        except Exception as error:
+            self.console.print(
+                f"[red]Notifier initialization failed: {error}[/red]"
+            )
+            return _NullNotifier()
 
     def _classify_threat(self, alert_description, log_context):
         """Classify a threat with the LLM or return a safe default."""
@@ -420,3 +442,11 @@ class _NullThreatIntel:
     def format_enrichment_summary(self, enrichment: dict) -> str:
         """Return placeholder text."""
         return "_Threat intelligence unavailable._"
+
+
+class _NullNotifier:
+    """Safe no-op notifier used when notification setup fails."""
+
+    def notify(self, investigation_result: dict) -> None:
+        """Silently skip notification."""
+        return None

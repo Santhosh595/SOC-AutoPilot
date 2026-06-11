@@ -120,6 +120,42 @@ python main.py feedback --id 1 --verdict FALSE_POSITIVE --note "Known scanner"
 | Foundation-sec-8B | ✅ Supported via Ollama | Install Ollama, run `ollama pull hf.co/bartowski/Cisco-Foundation-Sec-8B-GGUF`, set `ai.provider: ollama` in `config.yaml`. |
 | Groq | 🔜 Planned | Add Groq API key and set `ai.provider: groq` in `config.yaml`. |
 
+## Notifications
+
+SOC AutoPilot can automatically alert you over **Slack** and/or **Email**
+when a MALICIOUS threat with CRITICAL or HIGH severity is detected.
+
+### Slack (free)
+
+1. In your Slack workspace go to **Settings → Manage apps → Incoming Webhooks**.
+2. Create a new webhook, pick a channel, and copy the URL.
+3. Paste the URL into `config.yaml`:
+   ```yaml
+   notifications:
+     slack_webhook: "https://hooks.slack.com/services/T.../B.../xxxx"
+   ```
+
+### Email (Gmail)
+
+1. Enable **2-Step Verification** on your Google account.
+2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   and generate an App Password for "Mail".
+3. Add to `.env`:
+   ```env
+   SMTP_PASSWORD=your_app_password_here
+   ```
+4. Fill in `config.yaml`:
+   ```yaml
+   notifications:
+     email_to: "soc-team@company.com"
+     email_from: "your.gmail@gmail.com"
+     smtp_host: smtp.gmail.com
+     smtp_port: 587
+   ```
+
+> **Note:** Both channels are optional. If neither is configured the
+> investigation still completes — notifications are simply skipped.
+
 ## Built For
 
 Splunk Agentic Ops Hackathon 2026 — Security Track

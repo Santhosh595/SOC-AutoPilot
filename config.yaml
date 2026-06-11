@@ -18,3 +18,10 @@ agent:
 output:
   reports_dir: ./reports
   logs_dir: ./logs
+
+notifications:
+  slack_webhook: ""     # Paste Slack Incoming Webhook URL here
+  email_to: ""          # Recipient email address
+  email_from: ""        # Sender email address (Gmail recommended)
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
