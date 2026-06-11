@@ -1,6 +1,8 @@
 import json
+import os
 import re
 
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -9,18 +11,21 @@ from agent.knowledge_base import KnowledgeBase
 from agent.llm_adapter import LLMAdapter
 from agent.mcp_client import SplunkMCPClient
 from agent.reporter import Reporter
+from agent.threat_intel import ThreatIntel
 
 
 class AutoPilotAgent:
     """Coordinate IOC extraction, Splunk searches, AI analysis, and reporting."""
 
     def __init__(self, config: dict):
-        """Initialize Splunk, LLM, knowledge base, and console dependencies."""
+        """Initialize Splunk, LLM, knowledge base, threat intel, and console dependencies."""
         self.config = config
         self.console = Console()
+        load_dotenv()
         self.splunk = self._safe_init_splunk(config)
         self.llm_adapter = self._safe_init_llm(config)
         self.knowledge_base = self._safe_init_knowledge_base()
+        self.threat_intel = self._safe_init_threat_intel()
         reports_dir = config.get("output", {}).get("reports_dir", "./reports")
         self.reporter = Reporter(reports_dir)
 
@@ -56,6 +61,7 @@ class AutoPilotAgent:
         similar_past_cases = []
         false_positive_matches = []
         log_results = []
+        threat_enrichment = {}
         classification = self._safe_classification_default()
         report_markdown = ""
         detection_spl = ""
@@ -112,10 +118,27 @@ class AutoPilotAgent:
                 self.console.print(f"[red]Splunk log collection failed: {error}[/red]")
             progress.advance(task)
 
+            progress.update(
+                task,
+                description="[3.5/6] Enriching IOCs with threat intelligence...",
+            )
+            self.console.print("[3.5/6] Enriching IOCs with threat intelligence...")
+            try:
+                threat_enrichment = self.threat_intel.enrich_investigation(iocs)
+            except Exception as error:
+                self.console.print(
+                    f"[red]Threat intelligence enrichment failed: {error}[/red]"
+                )
+
             progress.update(task, description="[4/6] Classifying threat with AI...")
             self.console.print("[4/6] Classifying threat with AI...")
             try:
                 log_context = json.dumps(log_results, indent=2, default=str)
+                if threat_enrichment:
+                    log_context += (
+                        "\n\n--- Threat Intelligence Enrichment ---\n"
+                        + json.dumps(threat_enrichment, indent=2, default=str)
+                    )
                 classification = self._classify_threat(alert_description, log_context)
             except Exception as error:
                 self.console.print(f"[red]AI classification failed: {error}[/red]")
@@ -126,6 +149,7 @@ class AutoPilotAgent:
             investigation_data = {
                 "alert_description": alert_description,
                 "iocs": iocs,
+                "threat_enrichment": threat_enrichment,
                 "classification": classification,
                 "log_summary": log_results[:20],
                 "similar_past_cases": similar_past_cases,
@@ -160,12 +184,15 @@ class AutoPilotAgent:
                 self.console.print(f"[red]Saving investigation failed: {error}[/red]")
             progress.advance(task)
 
-        self.reporter.print_summary_table(classification, iocs, similar_past_cases)
+        self.reporter.print_summary_table(
+            classification, iocs, similar_past_cases, threat_enrichment
+        )
 
         return {
             "investigation_id": investigation_id,
             "alert_description": alert_description,
             "iocs": iocs,
+            "threat_enrichment": threat_enrichment,
             "similar_past_cases": similar_past_cases,
             "false_positive_matches": false_positive_matches,
             "log_results": log_results,
@@ -252,6 +279,22 @@ class AutoPilotAgent:
         except Exception as error:
             self.console.print(f"[red]Knowledge base initialization failed: {error}[/red]")
             return _NullKnowledgeBase()
+
+    def _safe_init_threat_intel(self):
+        """Initialize ThreatIntel with the AbuseIPDB key, or return a null fallback."""
+        try:
+            api_key = os.getenv("ABUSEIPDB_API_KEY", "")
+            if not api_key:
+                self.console.print(
+                    "[yellow]ABUSEIPDB_API_KEY not set — threat intel disabled[/yellow]"
+                )
+                return _NullThreatIntel()
+            return ThreatIntel(api_key)
+        except Exception as error:
+            self.console.print(
+                f"[red]Threat intel initialization failed: {error}[/red]"
+            )
+            return _NullThreatIntel()
 
     def _classify_threat(self, alert_description, log_context):
         """Classify a threat with the LLM or return a safe default."""
@@ -350,3 +393,30 @@ class _NullKnowledgeBase:
     def add_analyst_feedback(self, investigation_id, feedback, correct_verdict=None):
         """Ignore analyst feedback."""
         return None
+
+
+class _NullThreatIntel:
+    """Safe no-op threat intel used when AbuseIPDB is unavailable."""
+
+    def check_ip(self, ip_address: str) -> dict:
+        """Return a safe default for any IP."""
+        return {
+            "ip": ip_address,
+            "abuse_confidence_score": 0,
+            "total_reports": 0,
+            "country_code": "",
+            "isp": "",
+            "usage_type": "",
+            "is_tor": False,
+            "is_vpn": False,
+            "last_reported": "N/A",
+            "threat_level": "UNKNOWN",
+        }
+
+    def enrich_investigation(self, iocs: dict) -> dict:
+        """Return empty enrichment."""
+        return {}
+
+    def format_enrichment_summary(self, enrichment: dict) -> str:
+        """Return placeholder text."""
+        return "_Threat intelligence unavailable._"

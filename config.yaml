@@ -1,14 +1,15 @@
 splunk:
   host: localhost
-  port: 8000
-  token: ""  # Set SPLUNK_TOKEN in .env — that takes priority over this field
-  verify_ssl: false
+  port: 8089
+  username: 
+  password: 
+  verify_ssl: 
 
-demo_mode: true
+demo_mode: false
 
 ai:
   provider: gemini
-  gemini_model: gemini-2.0-flash
+  gemini_model: gemini-1.5-flash
 
 agent:
   max_investigation_steps: 10

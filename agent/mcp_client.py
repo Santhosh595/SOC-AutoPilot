@@ -1,250 +1,220 @@
-import json
-import os
-from datetime import datetime, timedelta
+"""
+Splunk MCP Client — REST API wrapper using basic auth (no tokens needed).
+Connects to Splunk using username/password instead of bearer tokens.
+Handles SSL warnings for self-signed certificates.
+"""
 
+import os
 import requests
-import urllib3
-from dotenv import load_dotenv
+from requests.auth import HTTPBasicAuth
+from urllib3.exceptions import InsecureRequestWarning
 from rich.console import Console
+
+# Suppress SSL warnings for self-signed Splunk certs
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+console = Console()
 
 
 class SplunkMCPClient:
-    """Connect to Splunk REST endpoints used by the SOC AutoPilot agent."""
+    """
+    REST API client for Splunk. Uses basic auth (username/password).
+    No tokens needed. Works with local Splunk instances.
+    """
 
     def __init__(self, config: dict):
-        """Initialize Splunk connection settings from project configuration."""
-        load_dotenv()
-        splunk_config = config.get("splunk", {})
-        self.demo_mode = config.get("demo_mode", False)
-        self.host = splunk_config.get("host", "localhost")
-        self.port = splunk_config.get("port", 8000)
-        self.token = os.getenv("SPLUNK_TOKEN") or splunk_config.get("token", "")
-        self.verify_ssl = splunk_config.get("verify_ssl", False)
-        self.base_url = f"https://{self.host}:{self.port}"
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
-        self.console = Console()
-        self.sample_alerts = self._load_sample_alerts()
+        """
+        Initialize Splunk connection from config.
 
-        if not self.verify_ssl:
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        Args:
+            config (dict): Configuration dict with structure:
+                config["splunk"]["host"] = "localhost"
+                config["splunk"]["port"] = 8000
+                config["splunk"]["username"] = "admin"
+                config["splunk"]["password"] = "your_password"
+                config["splunk"]["verify_ssl"] = False
+        """
+        self.host = config.get("splunk", {}).get("host", "localhost")
+        self.port = config.get("splunk", {}).get("port", 8000)
+        self.username = config.get("splunk", {}).get("username", "admin")
+        self.password = config.get("splunk", {}).get("password", "") or os.getenv("SPLUNK_PASSWORD", "")
+        self.verify_ssl = config.get("splunk", {}).get("verify_ssl", False)
+
+        self.base_url = f"https://{self.host}:{self.port}"
+        self.auth = HTTPBasicAuth(self.username, self.password)
+        self.headers = {"Content-Type": "application/json"}
 
     def run_search(
-        self,
-        spl_query: str,
-        earliest="-24h",
-        latest="now",
-        max_results=100,
+        self, spl_query: str, earliest="-24h", latest="now", max_results=100
     ) -> list:
-        """Run a Splunk oneshot search and return result dictionaries."""
-        if self.demo_mode:
-            return self._demo_search_results(spl_query, max_results)
+        """
+        Execute a Splunk search query.
 
+        Args:
+            spl_query (str): SPL search string
+            earliest (str): Earliest time range (default: -24h)
+            latest (str): Latest time range (default: now)
+            max_results (int): Maximum results to return (default: 100)
+
+        Returns:
+            list: List of result dictionaries from Splunk, or empty list if error
+        """
         try:
+            search_params = {
+                "search": spl_query,
+                "output_mode": "json",
+                "exec_mode": "oneshot",
+                "earliest_time": earliest,
+                "latest_time": latest,
+                "count": max_results,
+            }
+
             response = requests.post(
                 f"{self.base_url}/services/search/jobs",
-                headers=self.headers,
-                params={
-                    "search": spl_query,
-                    "output_mode": "json",
-                    "exec_mode": "oneshot",
-                    "earliest_time": earliest,
-                    "latest_time": latest,
-                    "count": max_results,
-                },
+                data=search_params,
+                auth=self.auth,
                 verify=self.verify_ssl,
                 timeout=30,
             )
-            response.raise_for_status()
-            payload = response.json()
-            return payload.get("results", []) or []
-        except Exception as error:
-            self.console.print(f"[red]Splunk search failed: {error}[/red]")
+
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get("results", [])
+                return results
+            else:
+                console.print(
+                    f"[red]Search failed: HTTP {response.status_code}[/red]"
+                )
+                return []
+
+        except requests.exceptions.RequestException as e:
+            console.print(f"[red]Search error: {str(e)}[/red]")
+            return []
+        except Exception as e:
+            console.print(f"[red]Unexpected error in run_search: {str(e)}[/red]")
             return []
 
     def get_alert_events(self, alert_keyword: str, time_range="-24h") -> list:
-        """Search recent Splunk events that contain an alert keyword."""
-        if self.demo_mode:
-            return self._demo_alert_events(alert_keyword)[:50]
+        """
+        Search for alert events by keyword.
 
-        spl_query = f'search index=* earliest={time_range} | search "{alert_keyword}" | head 50'
-        return self.run_search(spl_query)
+        Args:
+            alert_keyword (str): Keyword to search for in alerts
+            time_range (str): Time range (default: -24h)
 
-    def search_by_ip(self, ip_address: str, time_range="-24h") -> list:
-        """Search recent Splunk events for a specific IP address."""
-        if self.demo_mode:
-            return [
-                event
-                for event in self._demo_events()
-                if ip_address in {event.get("src_ip"), event.get("dest_ip")}
-            ][:100]
-
-        spl_query = f'search index=* earliest={time_range} "{ip_address}" | head 100'
-        return self.run_search(spl_query)
-
-    def search_by_user(self, username: str, time_range="-24h") -> list:
-        """Search recent Splunk events for a specific username."""
-        if self.demo_mode:
-            return [
-                event
-                for event in self._demo_events()
-                if str(event.get("user", "")).lower() == username.lower()
-            ][:100]
-
-        spl_query = (
-            f'search index=* earliest={time_range} '
-            f'user="{username}" OR User="{username}" | head 100'
-        )
-        return self.run_search(spl_query)
-
-    def get_failed_logins(self, time_range="-1h") -> list:
-        """Search for failed login activity and return the top grouped results."""
-        if self.demo_mode:
-            return [
-                event
-                for event in self._demo_events()
-                if event.get("EventCode") == 4625
-            ][:20]
-
-        spl_query = (
-            f'search index=* earliest={time_range} '
-            '(EventCode=4625 OR "failed login" OR "authentication failure") '
-            "| stats count by src_ip, user, _time | sort -count | head 20"
-        )
-        return self.run_search(spl_query)
-
-    def test_connection(self) -> bool:
-        """Run a simple Splunk search and print whether the connection works."""
-        if self.demo_mode:
-            self.console.print("[green]Demo mode enabled. Splunk connection skipped.[/green]")
-            return True
-
+        Returns:
+            list: List of matching alert events
+        """
         try:
-            response = requests.post(
-                f"{self.base_url}/services/search/jobs",
-                headers=self.headers,
-                params={
-                    "search": "search index=_internal | head 1",
-                    "output_mode": "json",
-                    "exec_mode": "oneshot",
-                },
-                verify=self.verify_ssl,
-                timeout=30,
-            )
-            response.raise_for_status()
-            self.console.print("[green]Splunk connection successful[/green]")
-            return True
-        except Exception as error:
-            self.console.print(f"[red]Splunk connection failed: {error}[/red]")
-            return False
-
-    def _load_sample_alerts(self) -> list:
-        """Load local sample alert descriptions for demo mode."""
-        sample_path = os.path.join(
-            os.path.dirname(__file__), "..", "sample_data", "sample_alerts.json"
-        )
-        try:
-            with open(sample_path, "r", encoding="utf-8") as sample_file:
-                return json.load(sample_file)
-        except Exception:
+            spl = f'search index=* earliest={time_range} | search "{alert_keyword}" | head 50'
+            results = self.run_search(spl, earliest=time_range, max_results=50)
+            return results
+        except Exception as e:
+            console.print(f"[red]Error in get_alert_events: {str(e)}[/red]")
             return []
 
-    def _demo_search_results(self, spl_query: str, max_results=100) -> list:
-        """Return fake Splunk results for a demo-mode SPL query."""
-        query = spl_query.lower()
-        events = self._demo_events()
+    def search_by_ip(self, ip_address: str, time_range="-24h") -> list:
+        """
+        Search for all events related to an IP address.
 
-        if "185.220.101.45" in query or "brute" in query or "4625" in query:
-            return [event for event in events if event.get("scenario") == "Brute Force Attack"][
-                :max_results
-            ]
-        if "powershell" in query or "4688" in query or "jsmith" in query:
-            return [
-                event
-                for event in events
-                if event.get("scenario") == "Suspicious PowerShell"
-            ][:max_results]
-        if "203.0.113.99" in query or "svc_backup" in query or "bytes_out" in query:
-            return [
-                event
-                for event in events
-                if event.get("scenario") == "Data Exfiltration Pattern"
-            ][:max_results]
-        return events[:max_results]
+        Args:
+            ip_address (str): IP address to search for
+            time_range (str): Time range (default: -24h)
 
-    def _demo_alert_events(self, alert_keyword: str) -> list:
-        """Return demo events that best match a sample alert description."""
-        alert_text = alert_keyword.lower()
-        for sample_alert in self.sample_alerts:
-            if self._shares_words(alert_text, sample_alert.lower()):
-                return self._demo_search_results(sample_alert, 100)
-        return self._demo_search_results(alert_keyword, 100)
+        Returns:
+            list: List of events involving this IP
+        """
+        try:
+            spl = f'search index=* earliest={time_range} "{ip_address}" | head 100'
+            results = self.run_search(spl, earliest=time_range, max_results=100)
+            return results
+        except Exception as e:
+            console.print(f"[red]Error in search_by_ip: {str(e)}[/red]")
+            return []
 
-    def _demo_events(self) -> list:
-        """Build deterministic fake events for local demo investigations."""
-        now = datetime.utcnow()
-        events = []
+    def search_by_user(self, username: str, time_range="-24h") -> list:
+        """
+        Search for all events related to a user.
 
-        for index in range(50):
-            events.append(
-                {
-                    "_time": (now - timedelta(minutes=120 - index * 2)).isoformat(),
-                    "scenario": "Brute Force Attack",
-                    "EventCode": 4625,
-                    "action": "failure",
-                    "src_ip": "185.220.101.45",
-                    "user": "admin",
-                    "host": "DC-01",
-                    "signature": "An account failed to log on",
-                }
-            )
-        events.append(
-            {
-                "_time": (now - timedelta(minutes=1)).isoformat(),
-                "scenario": "Brute Force Attack",
-                "EventCode": 4624,
-                "action": "success",
-                "src_ip": "185.220.101.45",
-                "user": "admin",
-                "host": "DC-01",
-                "signature": "An account was successfully logged on",
+        Args:
+            username (str): Username to search for
+            time_range (str): Time range (default: -24h)
+
+        Returns:
+            list: List of events involving this user
+        """
+        try:
+            spl = f'search index=* earliest={time_range} (user="{username}" OR User="{username}") | head 100'
+            results = self.run_search(spl, earliest=time_range, max_results=100)
+            return results
+        except Exception as e:
+            console.print(f"[red]Error in search_by_user: {str(e)}[/red]")
+            return []
+
+    def get_failed_logins(self, time_range="-1h") -> list:
+        """
+        Search for failed login attempts.
+
+        Args:
+            time_range (str): Time range (default: -1h)
+
+        Returns:
+            list: List of failed login events
+        """
+        try:
+            spl = f'search index=* earliest={time_range} (EventCode=4625 OR "failed login" OR "authentication failure") | stats count by src_ip, user, _time | sort -count | head 20'
+            results = self.run_search(spl, earliest=time_range, max_results=20)
+            return results
+        except Exception as e:
+            console.print(f"[red]Error in get_failed_logins: {str(e)}[/red]")
+            return []
+
+    def test_connection(self) -> bool:
+        """
+        Test the connection to Splunk.
+
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        try:
+            # Try a simple search to verify auth and connection
+            search_params = {
+                "search": "search index=_internal | head 1",
+                "output_mode": "json",
+                "exec_mode": "oneshot",
+                "count": 1,
             }
-        )
 
-        for index in range(5):
-            events.append(
-                {
-                    "_time": (now - timedelta(minutes=45 - index * 4)).isoformat(),
-                    "scenario": "Suspicious PowerShell",
-                    "EventCode": 4688,
-                    "user": "jsmith",
-                    "host": "WORKSTATION-04",
-                    "process_name": "powershell.exe",
-                    "command_line": "powershell.exe -NoProfile -EncodedCommand SQBFAFgA",
-                }
+            response = requests.post(
+                f"{self.base_url}/services/search/jobs",
+                data=search_params,
+                auth=self.auth,
+                verify=self.verify_ssl,
+                timeout=10,
             )
 
-        for index in range(10):
-            events.append(
-                {
-                    "_time": (now - timedelta(minutes=30 - index * 2)).isoformat(),
-                    "scenario": "Data Exfiltration Pattern",
-                    "action": "allowed",
-                    "direction": "outbound",
-                    "src_ip": "10.10.4.25",
-                    "dest_ip": "203.0.113.99",
-                    "user": "svc_backup",
-                    "host": "BACKUP-SRV-01",
-                    "bytes_out": 50000001 + index * 5000000,
-                }
+            if response.status_code == 200:
+                console.print(
+                    "[green]✓ Splunk connection successful[/green]"
+                )
+                return True
+            else:
+                console.print(
+                    f"[red]✗ Splunk connection failed: HTTP {response.status_code}[/red]"
+                )
+                console.print(
+                    "[yellow]  Check your username and password in .env[/yellow]"
+                )
+                return False
+
+        except requests.exceptions.ConnectionError:
+            console.print(
+                "[red]✗ Cannot connect to Splunk[/red]"
             )
-
-        return events
-
-    def _shares_words(self, left: str, right: str) -> bool:
-        """Return whether two strings share any meaningful words."""
-        left_words = {word for word in left.split() if len(word) > 3}
-        right_words = {word for word in right.split() if len(word) > 3}
-        return bool(left_words & right_words)
+            console.print(
+                f"[yellow]  Is Splunk running at {self.base_url}?[/yellow]"
+            )
+            return False
+        except Exception as e:
+            console.print(f"[red]✗ Connection test error: {str(e)}[/red]")
+            return False

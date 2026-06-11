@@ -44,7 +44,13 @@ class Reporter:
 
         return file_path
 
-    def print_summary_table(self, classification: dict, iocs: dict, similar_cases: list):
+    def print_summary_table(
+        self,
+        classification: dict,
+        iocs: dict,
+        similar_cases: list,
+        threat_enrichment: dict | None = None,
+    ):
         """Print a Rich panel containing the investigation summary table."""
         table = Table()
         table.add_column("Field", style="cyan")
@@ -56,6 +62,10 @@ class Reporter:
         table.add_row(
             "Recommended Action",
             str(classification.get("recommended_action", "No action provided.")),
+        )
+        table.add_row(
+            "Threat Intel",
+            self._format_threat_intel_row(threat_enrichment),
         )
 
         self.console.print(Panel(table, title="Investigation Summary"))
@@ -107,3 +117,25 @@ class Reporter:
             if values:
                 found.append((label, [str(value) for value in values]))
         return found
+
+    def _format_threat_intel_row(self, threat_enrichment: dict | None) -> str:
+        """Build a compact summary string for the Threat Intel table row."""
+        if not threat_enrichment:
+            return "[dim]No data[/dim]"
+
+        _emoji = {
+            "HIGHLY MALICIOUS": "🔴",
+            "MALICIOUS": "🟠",
+            "SUSPICIOUS": "🟡",
+            "CLEAN": "🟢",
+            "UNKNOWN": "⚪",
+        }
+
+        parts = []
+        for ip, info in threat_enrichment.items():
+            level = info.get("threat_level", "UNKNOWN")
+            emoji = _emoji.get(level, "⚪")
+            score = info.get("abuse_confidence_score", 0)
+            parts.append(f"{emoji} {ip} ({score}/100)")
+
+        return " | ".join(parts) if parts else "[dim]No data[/dim]"
