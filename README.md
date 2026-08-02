@@ -1,5 +1,9 @@
 # SOC AutoPilot
 
+<p align="center">
+  <img src="assets/soc-autopilot-banner.svg" alt="SOC AutoPilot — autonomous Splunk alert investigation in under 2 minutes" width="100%"/>
+</p>
+
 **SOC AutoPilot — Autonomous AI agent that investigates Splunk security alerts in under 2 minutes**
 
 ## The Problem
