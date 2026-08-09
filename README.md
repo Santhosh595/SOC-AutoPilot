@@ -34,7 +34,7 @@ YouTube video: [Coming soon](https://youtube.com/)
 - False positive detection from historical patterns
 - Auto-generates SPL detection rules
 - Analyst feedback loop
-- Supports multiple AI backends (Gemini, Groq, Ollama)
+- Supports multiple AI backends (Gemini supported; Groq, Ollama planned)
 
 ## Architecture
 
@@ -42,7 +42,7 @@ YouTube video: [Coming soon](https://youtube.com/)
 
 ## Splunk Integration
 
-SOC AutoPilot connects to Splunk via the Splunk REST API (`/services/search/jobs`) using Bearer token authentication. This is compatible with the Splunk MCP Server app on Splunkbase, which exposes the same REST endpoints. The `mcp` Python package is included in `requirements.txt` for future native MCP transport support.
+SOC AutoPilot connects to Splunk via the Splunk REST API (`/services/search/jobs`) using basic auth (username/password). This is compatible with the Splunk MCP Server app on Splunkbase, which exposes the same REST endpoints. The `mcp` Python package is included in `requirements.txt` for future native MCP transport support.
 
 ## Setup
 
@@ -55,7 +55,7 @@ SOC AutoPilot connects to Splunk via the Splunk REST API (`/services/search/jobs
 
 ```bash
 git clone https://github.com/Santhosh595/SOC-AutoPilot.git
-cd soc-autopilot
+cd SOC-AutoPilot
 ```
 
 ### 2. Run Installer
@@ -81,9 +81,9 @@ SPLUNK_TOKEN=your_token_here
 
 Get a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
 
-> **No keys? No Splunk?** The repo ships with `demo_mode: true` in `config.yaml`.
-> Run `python main.py test` and `python main.py investigate "..."` immediately —
-> all Splunk calls use built-in sample data and the LLM step is skipped gracefully.
+> **No keys? No Splunk?** Set `demo_mode: true` in `config.yaml` — the
+> LLM step is skipped gracefully and the pipeline runs on extracted IOCs
+> with safe defaults. Splunk connectivity problems never crash the agent.
 
 ### 4. (Optional) Connect Splunk
 
@@ -121,8 +121,8 @@ python main.py feedback --id 1 --verdict FALSE_POSITIVE --note "Known scanner"
 | Backend | Status | Setup |
 | --- | --- | --- |
 | Gemini | ✅ Default | Add `GEMINI_API_KEY` to `.env`, set `ai.provider: gemini` in `config.yaml`. |
-| Foundation-sec-8B | ✅ Supported via Ollama | Install Ollama, run `ollama pull hf.co/bartowski/Cisco-Foundation-Sec-8B-GGUF`, set `ai.provider: ollama` in `config.yaml`. |
-| Groq | 🔜 Planned | Add Groq API key and set `ai.provider: groq` in `config.yaml`. |
+| Groq | 🔜 Planned | Not yet implemented — `llm_adapter.py` currently accepts Gemini only. |
+| Ollama | 🔜 Planned | Not yet implemented — `llm_adapter.py` currently accepts Gemini only. |
 
 ## Notifications
 
