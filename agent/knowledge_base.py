@@ -1,7 +1,18 @@
 import json
 import re
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now_iso() -> str:
+    """Current UTC time as a naive ISO string.
+
+    `datetime.utcnow()` is deprecated and is scheduled for removal; the
+    timezone-aware call is the replacement. The tzinfo is dropped so the
+    stored value keeps exactly the format the database already holds --
+    a naive UTC timestamp, not an offset-bearing one.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 
 class KnowledgeBase:
@@ -61,7 +72,7 @@ class KnowledgeBase:
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                datetime.utcnow().isoformat(),
+                _utc_now_iso(),
                 alert_description,
                 json.dumps(iocs),
                 verdict,
@@ -164,7 +175,7 @@ class KnowledgeBase:
 
     def add_false_positive_pattern(self, pattern, source_ip, alert_type):
         """Insert or update a false-positive pattern by source IP and alert type."""
-        now = datetime.utcnow().isoformat()
+        now = _utc_now_iso()
         cursor = self.conn.cursor()
         cursor.execute(
             """

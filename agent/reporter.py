@@ -1,10 +1,19 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+
+def _utc_now_stamp() -> str:
+    """Current UTC time as a filename stamp.
+
+    Replaces the deprecated `datetime.utcnow()`. The tzinfo is dropped so
+    the stamp stays a plain UTC value with the same format as before.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")
 
 
 class Reporter:
@@ -18,7 +27,7 @@ class Reporter:
 
     def save_markdown_report(self, report_content: str, prefix="investigation") -> str:
         """Save markdown report content and return the full file path."""
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = _utc_now_stamp()
         filename = f"{prefix}_{timestamp}.md"
         file_path = os.path.join(self.reports_dir, filename)
 
@@ -35,7 +44,7 @@ class Reporter:
         if not spl_content or not spl_content.strip():
             return None
         sanitized_alert_name = self._sanitize_filename(alert_name)
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = _utc_now_stamp()
         filename = f"detection_{sanitized_alert_name}_{timestamp}.spl"
         file_path = os.path.join(self.reports_dir, filename)
 

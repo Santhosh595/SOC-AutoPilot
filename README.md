@@ -1,5 +1,9 @@
 # SOC AutoPilot
 
+[![CI](https://github.com/Santhosh595/SOC-AutoPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Santhosh595/SOC-AutoPilot/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 <p align="center">
   <img src="assets/soc-autopilot-banner.svg" alt="SOC AutoPilot — autonomous Splunk alert investigation in under 2 minutes" width="100%"/>
 </p>
@@ -159,6 +163,20 @@ when a MALICIOUS threat with CRITICAL or HIGH severity is detected.
 
 > **Note:** Both channels are optional. If neither is configured the
 > investigation still completes — notifications are simply skipped.
+
+## Tests
+
+The test suite covers the agent's **pure logic** — IOC extraction, threat-level
+mapping, private-IP detection, and the knowledge base's similarity search. It
+needs no Splunk, no LLM key and no `ABUSEIPDB_API_KEY`, so it runs anywhere:
+
+```bash
+pip install -r requirements.txt
+pip install pytest
+python -m pytest tests/ -q
+```
+
+It runs in CI on Python 3.10, 3.11 and 3.12.
 
 ## Built For
 
