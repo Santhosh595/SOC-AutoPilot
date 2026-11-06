@@ -180,3 +180,60 @@ class TestKnowledgeBase:
 
     def test_word_extraction_normalizes_case(self, kb: KnowledgeBase) -> None:
         assert kb._extract_words("Foo BAR foo") == {"foo", "bar"}
+
+
+class TestOllamaBackend:
+    """Ollama is the keyless local backend; fake HTTP, never touch network."""
+
+    def _adapter(self, monkeypatch, post):
+        from agent import llm_adapter
+
+        monkeypatch.setattr(llm_adapter.requests, "post", post)
+        return llm_adapter.LLMAdapter({"ai": {"provider": "ollama"}})
+
+    def test_analyze_posts_model_and_returns_text(self, monkeypatch) -> None:
+        calls = {}
+
+        def fake_post(url, json=None, timeout=None):
+            calls["url"] = url
+            calls["json"] = json
+
+            class R:
+                def raise_for_status(self):
+                    pass
+
+                def json(self):
+                    return {"response": "  padded  "}
+
+            return R()
+
+        adapter = self._adapter(monkeypatch, fake_post)
+        assert adapter.analyze("sys", "user") == "padded"
+        assert calls["url"] == "http://localhost:11434/api/generate"
+        assert calls["json"]["model"] == "llama3.2:1b"
+        assert "sys" in calls["json"]["prompt"] and "user" in calls["json"]["prompt"]
+
+    def test_analyze_error_uses_llm_error_prefix(self, monkeypatch) -> None:
+        def fake_post(*args, **kwargs):
+            raise ConnectionError("refused")
+
+        adapter = self._adapter(monkeypatch, fake_post)
+        assert adapter.analyze("s", "u").startswith("LLM_ERROR: ")
+
+    def test_classify_falls_back_when_ollama_down(self, monkeypatch) -> None:
+        def fake_post(*args, **kwargs):
+            raise ConnectionError("refused")
+
+        adapter = self._adapter(monkeypatch, fake_post)
+        assert adapter.classify_threat("alert", "logs")["verdict"] == "NEEDS_REVIEW"
+
+    def test_ollama_needs_no_api_key(self, monkeypatch) -> None:
+        from agent import llm_adapter
+
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.setattr(
+            llm_adapter.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no network"))
+        )
+        # Construction must not raise even without GEMINI_API_KEY.
+        adapter = llm_adapter.LLMAdapter({"ai": {"provider": "ollama"}})
+        assert adapter.backend is not None

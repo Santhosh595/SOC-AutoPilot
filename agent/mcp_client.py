@@ -4,8 +4,10 @@ Connects to Splunk using username/password instead of bearer tokens.
 Handles SSL warnings for self-signed certificates.
 """
 
+import json
 import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -37,6 +39,12 @@ class SplunkMCPClient:
         self.username = config.get("splunk", {}).get("username", "admin")
         self.password = config.get("splunk", {}).get("password", "") or os.getenv("SPLUNK_PASSWORD", "")
         self.verify_ssl = config.get("splunk", {}).get("verify_ssl", True)
+        # Parallel Splunk searches: up to this many run at once. Splunk
+        # oneshot jobs are network-bound, so overlapping them directly
+        # shortens investigations when many IOCs are searched.
+        self.max_workers = max(
+            1, int(config.get("splunk", {}).get("max_workers", 4))
+        )
 
         self.base_url = f"https://{self.host}:{self.port}"
         self.auth = HTTPBasicAuth(self.username, self.password)
@@ -66,16 +74,32 @@ class SplunkMCPClient:
         Returns:
             list: List of result dictionaries from Splunk, or empty list if error
         """
-        try:
-            search_params = {
-                "search": spl_query,
-                "output_mode": "json",
-                "exec_mode": "oneshot",
-                "earliest_time": earliest,
-                "latest_time": latest,
-                "count": max_results,
-            }
+        search_params = {
+            "search": spl_query,
+            "output_mode": "json",
+            "exec_mode": "oneshot",
+            "earliest_time": earliest,
+            "latest_time": latest,
+            "count": max_results,
+        }
+        return self._run_one(search_params)
 
+    def run_searches(self, search_params_list: list) -> list:
+        """Run several searches concurrently and flatten the results.
+
+        Results come back in submission order; empty results (a failed
+        search) are dropped and duplicates removed.
+        """
+        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+            results = list(pool.map(self._run_one, search_params_list))
+        flat = []
+        for batch in results:
+            flat.extend(batch)
+        return self._dedupe(flat)
+
+    def _run_one(self, search_params: dict) -> list:
+        """Execute one Splunk oneshot search (a single pool worker)."""
+        try:
             response = requests.post(
                 f"{self.base_url}/services/search/jobs",
                 data=search_params,
@@ -100,6 +124,18 @@ class SplunkMCPClient:
         except Exception as e:
             console.print(f"[red]Unexpected error in run_search: {str(e)}[/red]")
             return []
+
+    @staticmethod
+    def _dedupe(events: list) -> list:
+        """Deduplicate events by stable JSON representation, keep order."""
+        seen = set()
+        unique = []
+        for event in events:
+            key = json.dumps(event, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key)
+                unique.append(event)
+        return unique
 
     def get_alert_events(self, alert_keyword: str, time_range="-24h") -> list:
         """
