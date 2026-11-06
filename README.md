@@ -125,8 +125,8 @@ python main.py feedback --id 1 --verdict FALSE_POSITIVE --note "Known scanner"
 | Backend | Status | Setup |
 | --- | --- | --- |
 | Gemini | ✅ Default | Add `GEMINI_API_KEY` to `.env`, set `ai.provider: gemini` in `config.yaml`. |
-| Groq | 🔜 Planned | Not yet implemented — `llm_adapter.py` currently accepts Gemini only. |
-| Ollama | 🔜 Planned | Not yet implemented — `llm_adapter.py` currently accepts Gemini only. |
+| Ollama | ✅ Supported | Local, keyless. Run `ollama serve`, `ollama pull llama3.2:1b`, set `ai.provider: ollama` (model/url/timeout in `config.yaml`). |
+| Groq | 🔜 Planned | Not yet implemented — `llm_adapter.py` accepts Gemini and Ollama. |
 
 ## Notifications
 

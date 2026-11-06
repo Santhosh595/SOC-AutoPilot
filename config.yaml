@@ -4,12 +4,16 @@ splunk:
   username: 
   password: 
   verify_ssl: true
+  max_workers: 4         # parallel Splunk searches
 
 demo_mode: false
 
 ai:
-  provider: gemini
+  provider: gemini       # or "ollama" for a local, keyless LLM
   gemini_model: gemini-2.0-flash
+  ollama_url: "http://localhost:11434"
+  ollama_model: "llama3.2:1b"
+  ollama_timeout: 120
 
 agent:
   max_investigation_steps: 10
