@@ -80,7 +80,19 @@ class Notifier:
             verdict = str(classification.get("verdict", "")).upper()
             severity = str(classification.get("severity", "")).upper()
 
-            if verdict not in self._NOTIFY_VERDICTS or severity not in self._NOTIFY_SEVERITIES:
+            result_verdict = investigation_result.get("verdict")
+            if isinstance(result_verdict, dict) and result_verdict.get("escalate") is not None:
+                if not result_verdict.get("escalate"):
+                    console.print(
+                        f"[green][NOTIFIER] No notification needed "
+                        f"(verdict: {result_verdict.get('decision', 'N/A')})[/green]"
+                    )
+                    return
+                console.print(
+                    f"[bold red][NOTIFIER] Investigator Verdict escalates "
+                    f"({result_verdict.get('decision', 'N/A')})[/bold red]"
+                )
+            elif verdict not in self._NOTIFY_VERDICTS or severity not in self._NOTIFY_SEVERITIES:
                 console.print(
                     "[green][NOTIFIER] No notification needed (low severity)[/green]"
                 )
@@ -123,6 +135,15 @@ class Notifier:
 
             confidence_pct = self._confidence_pct(classification)
 
+            result_verdict = investigation_result.get("verdict")
+            if isinstance(result_verdict, dict) and result_verdict.get("decision"):
+                verdict_line = (
+                    f"{result_verdict['decision']} "
+                    f"({result_verdict.get('confidence', 0):.0%})"
+                )
+            else:
+                verdict_line = ""
+
             blocks = [
                 {
                     "type": "header",
@@ -139,8 +160,9 @@ class Notifier:
                         {
                             "type": "mrkdwn",
                             "text": (
-                                f"*Verdict:* {classification.get('verdict', 'N/A')} "
-                                f"| *Severity:* {classification.get('severity', 'N/A')}"
+                                f"*Verdict:* {classification.get('verdict', 'N/A')}"
+                                f" | *Severity:* {classification.get('severity', 'N/A')}"
+                                f" | *Final:* {verdict_line or 'N/A'}"
                             ),
                         },
                         {

@@ -38,7 +38,8 @@ YouTube video: [Coming soon](https://youtube.com/)
 - False positive detection from historical patterns
 - Auto-generates SPL detection rules
 - Analyst feedback loop
-- Supports multiple AI backends (Gemini supported; Groq, Ollama planned)
+- Investigator Verdict gate — explainable go/no-go fusing LLM verdict, AbuseIPDB threat score, false-positive history, and log volume, with an MITRE ATT&CK guess (see `agent/verdict.py`)
+- Supports multiple AI backends (Gemini supported; Ollama local/keyless supported; Groq planned)
 
 ## Architecture
 
@@ -131,7 +132,18 @@ python main.py feedback --id 1 --verdict FALSE_POSITIVE --note "Known scanner"
 ## Notifications
 
 SOC AutoPilot can automatically alert you over **Slack** and/or **Email**
-when a MALICIOUS threat with CRITICAL or HIGH severity is detected.
+when the **Investigator Verdict** escalates a threat (see below).
+Without a verdict, it falls back to MALICIOUS + CRITICAL/HIGH.
+
+### Investigator Verdict
+
+After classification, the Verdict gate fuses four signals into one
+go/no-go: LLM verdict + confidence, AbuseIPDB threat score, known
+false-positive history, and corroborating Splunk log volume. It also
+guesses a MITRE ATT&CK technique from the alert text. Thresholds are
+deterministic and only the LLM-confidence threshold is configurable:
+`agent.confidence_threshold` in `config.yaml` (default 0.6). If the
+verdict does not escalate, no notification is sent.
 
 ### Slack (free)
 

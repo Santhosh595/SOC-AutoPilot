@@ -13,6 +13,7 @@ from agent.mcp_client import SplunkMCPClient
 from agent.reporter import Reporter
 from agent.notifier import Notifier
 from agent.threat_intel import ThreatIntel
+from agent.verdict import compute_verdict
 
 
 class AutoPilotAgent:
@@ -146,6 +147,24 @@ class AutoPilotAgent:
                 self.console.print(f"[red]AI classification failed: {error}[/red]")
             progress.advance(task)
 
+            # Investigator Verdict gate: fuse LLM + intel + FP history +
+            # log volume + ATT&CK guess into one go/no-go decision.
+            verdict = compute_verdict(
+                classification,
+                threat_enrichment,
+                false_positive_matches,
+                log_results,
+                alert_description,
+                confidence_threshold=float(
+                    self.config.get("agent", {}).get("confidence_threshold", 0.6)
+                ),
+            )
+            self.console.print(
+                f"[bold]Investigator Verdict: {verdict['decision']}"
+                f" (confidence {verdict['confidence']:.2f}"
+                f"{', ESLCALATE' if verdict['escalate'] else ''})[/bold]"
+            )
+
             progress.update(task, description="[5/6] Generating investigation report...")
             self.console.print("[5/6] Generating investigation report...")
             investigation_data = {
@@ -153,6 +172,7 @@ class AutoPilotAgent:
                 "iocs": iocs,
                 "threat_enrichment": threat_enrichment,
                 "classification": classification,
+                "verdict": verdict,
                 "log_summary": log_results[:20],
                 "similar_past_cases": similar_past_cases,
                 "false_positive_matches": false_positive_matches,
@@ -187,7 +207,8 @@ class AutoPilotAgent:
             progress.advance(task)
 
         self.reporter.print_summary_table(
-            classification, iocs, similar_past_cases, threat_enrichment
+            classification, iocs, similar_past_cases, threat_enrichment,
+            verdict=verdict,
         )
 
         result = {
@@ -199,6 +220,7 @@ class AutoPilotAgent:
             "false_positive_matches": false_positive_matches,
             "log_results": log_results,
             "classification": classification,
+            "verdict": verdict,
             "report": report_markdown,
             "detection_spl": detection_spl,
             "report_path": report_path,
