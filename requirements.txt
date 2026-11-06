@@ -1,9 +1,5 @@
 requests
 pyyaml
 python-dotenv
-google-generativeai
 google-genai
-mcp
 rich
-urllib3
-matplotlib

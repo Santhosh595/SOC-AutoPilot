@@ -3,13 +3,13 @@ splunk:
   port: 8089
   username: 
   password: 
-  verify_ssl: 
+  verify_ssl: true
 
 demo_mode: false
 
 ai:
   provider: gemini
-  gemini_model: gemini-1.5-flash
+  gemini_model: gemini-2.0-flash
 
 agent:
   max_investigation_steps: 10
