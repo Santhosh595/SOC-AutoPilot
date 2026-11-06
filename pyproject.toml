@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soc-autopilot"
+version = "1.0.0"
+description = "Autonomous AI agent that investigates Splunk security alerts"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Santhosh L" }]
+dependencies = [
+    "requests",
+    "pyyaml",
+    "python-dotenv",
+    "google-genai",
+    "rich",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+soc-autopilot = "main:main"
+
+[tool.setuptools]
+py-modules = ["main"]
+packages = ["agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

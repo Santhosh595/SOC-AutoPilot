@@ -5,13 +5,11 @@ Handles SSL warnings for self-signed certificates.
 """
 
 import os
+import warnings
+
 import requests
 from requests.auth import HTTPBasicAuth
-from urllib3.exceptions import InsecureRequestWarning
 from rich.console import Console
-
-# Suppress SSL warnings for self-signed Splunk certs
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 console = Console()
 
@@ -32,17 +30,26 @@ class SplunkMCPClient:
                 config["splunk"]["port"] = 8000
                 config["splunk"]["username"] = "admin"
                 config["splunk"]["password"] = "your_password"
-                config["splunk"]["verify_ssl"] = False
+                config["splunk"]["verify_ssl"] = True
         """
         self.host = config.get("splunk", {}).get("host", "localhost")
         self.port = config.get("splunk", {}).get("port", 8000)
         self.username = config.get("splunk", {}).get("username", "admin")
         self.password = config.get("splunk", {}).get("password", "") or os.getenv("SPLUNK_PASSWORD", "")
-        self.verify_ssl = config.get("splunk", {}).get("verify_ssl", False)
+        self.verify_ssl = config.get("splunk", {}).get("verify_ssl", True)
 
         self.base_url = f"https://{self.host}:{self.port}"
         self.auth = HTTPBasicAuth(self.username, self.password)
         self.headers = {"Content-Type": "application/json"}
+
+        if not self.verify_ssl:
+            # Opt-in only: the caller explicitly turned verification OFF.
+            # Downgrade the warning to a printed notice instead of hiding it.
+            warnings.filterwarnings("ignore", message=".*InsecureRequestWarning.*")
+            console.print(
+                "[yellow]SSL verification disabled — Splunk connection is not "
+                "verified. Set splunk.verify_ssl: true to restore checks.[/yellow]"
+            )
 
     def run_search(
         self, spl_query: str, earliest="-24h", latest="now", max_results=100
