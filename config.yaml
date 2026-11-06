@@ -17,6 +17,8 @@ ai:
 
 agent:
   max_investigation_steps: 10
+  # Minimum LLM confidence for the Investigator Verdict gate to trust
+  # a MALICIOUS / FALSE_POSITIVE classification (vs asking a human).
   confidence_threshold: 0.6
 
 output:

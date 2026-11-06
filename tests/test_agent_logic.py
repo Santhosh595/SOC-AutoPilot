@@ -237,3 +237,92 @@ class TestOllamaBackend:
         # Construction must not raise even without GEMINI_API_KEY.
         adapter = llm_adapter.LLMAdapter({"ai": {"provider": "ollama"}})
         assert adapter.backend is not None
+
+
+class TestVerdict:
+    """Phase 3: Investigator Verdict — fusing threat intel, FP history,
+    log volume and the LLM verdict into one go/no-go decision."""
+
+    def test_known_false_positive_pattern_wins(self) -> None:
+        from agent.verdict import compute_verdict
+
+        result = compute_verdict(
+            {"verdict": "FALSE_POSITIVE", "confidence": 0.7},
+            {},
+            [{"count": 5}],
+            [],
+            "known test alert",
+        )
+        assert result["decision"] == "FALSE_POSITIVE"
+        assert result["escalate"] is False
+
+    def test_strong_threat_intel_escalates_even_if_llm_unsure(self) -> None:
+        from agent.verdict import compute_verdict
+
+        result = compute_verdict(
+            {"verdict": "NEEDS_REVIEW", "confidence": 0.3},
+            {"1.2.3.4": {"abuse_confidence_score": 90}},
+            [],
+            [{"_raw": "x"}],
+            "suspicious login",
+        )
+        assert result["decision"] == "MALICIOUS"
+        assert result["escalate"] is True
+
+    def test_llm_malicious_with_logs_escalates(self) -> None:
+        from agent.verdict import compute_verdict
+
+        result = compute_verdict(
+            {"verdict": "MALICIOUS", "confidence": 0.9},
+            {},
+            [],
+            [{"_raw": "x"}],
+            "alert",
+        )
+        assert result["decision"] == "MALICIOUS"
+        assert result["escalate"] is True
+
+    def test_no_conclusive_signal_needs_review(self) -> None:
+        from agent.verdict import compute_verdict
+
+        result = compute_verdict(
+            {"verdict": "NEEDS_REVIEW", "confidence": 0.2},
+            {},
+            [],
+            [],
+            "mystery alert",
+        )
+        assert result["decision"] == "NEEDS_REVIEW"
+        assert result["escalate"] is False
+
+    def test_attack_guess_maps_brute_force(self) -> None:
+        from agent.verdict import guess_attack_tactic
+
+        technique, tactic, conf = guess_attack_tactic("Repeated brute force failed login attempts")
+        assert technique == "T1110"
+        assert tactic == "Credential Access"
+        assert conf > 0
+
+    def test_attack_guess_unknown_text_stays_unknown(self) -> None:
+        from agent.verdict import guess_attack_tactic
+
+        assert guess_attack_tactic("plain maintenance notice") == ("T0000", "Unknown", 0.0)
+
+    def test_verdict_output_shape(self) -> None:
+        from agent.verdict import compute_verdict
+
+        result = compute_verdict({}, {}, [], [], "")
+        assert set(result) >= {"decision", "confidence", "escalate", "why", "attack_guess", "signals"}
+        assert 0.0 <= result["confidence"] <= 1.0
+
+    def test_malformed_inputs_never_raise(self) -> None:
+        from agent.verdict import compute_verdict
+
+        result = compute_verdict(
+            {"verdict": "MALICIOUS", "confidence": "high"},
+            {"1.1.1.1": {"abuse_confidence_score": "bad"}},
+            [{"count": "bad"}],
+            None,
+            None,
+        )
+        assert result["decision"] in {"MALICIOUS", "FALSE_POSITIVE", "NEEDS_REVIEW"}

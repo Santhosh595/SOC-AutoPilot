@@ -59,6 +59,7 @@ class Reporter:
         iocs: dict,
         similar_cases: list,
         threat_enrichment: dict | None = None,
+        verdict: dict | None = None,
     ):
         """Print a Rich panel containing the investigation summary table."""
         table = Table()
@@ -76,6 +77,23 @@ class Reporter:
             "Threat Intel",
             self._format_threat_intel_row(threat_enrichment),
         )
+        if verdict:
+            table.add_row(
+                "Investigator Verdict",
+                f"{self._colored_verdict(verdict.get('decision'))} "
+                f"({self._format_confidence(verdict.get('confidence'))})"
+                + (" — ESCALATE" if verdict.get("escalate") else ""),
+            )
+            table.add_row(
+                "ATT&CK Guess",
+                f"{verdict['attack_guess']['tactic']} "
+                f"({verdict['attack_guess']['technique_id']})"
+                if verdict.get("attack_guess", {}).get("technique_id") != "T0000"
+                else "[dim]None[/dim]",
+            )
+            why = verdict.get("why") or []
+            if why:
+                table.add_row("Why", "; ".join(str(w) for w in why))
 
         self.console.print(Panel(table, title="Investigation Summary"))
 
